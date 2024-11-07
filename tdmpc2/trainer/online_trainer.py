@@ -25,6 +25,7 @@ class OnlineTrainer(Trainer):
 
 	def eval(self):
 		"""Evaluate a TD-MPC2 agent."""
+  		# TODO: turn it into batched evaluation
 		ep_rewards, ep_successes = [], []
 		for i in range(self.cfg.eval_episodes):
 			obs, done, ep_reward, t = self.env.reset(), False, 0, 0
@@ -38,7 +39,7 @@ class OnlineTrainer(Trainer):
 				t += 1
 				if self.cfg.save_video:
 					self.logger.video.record(self.env)
-			ep_rewards.append(ep_reward)
+			ep_rewards.append(ep_reward.detach().cpu())
 			ep_successes.append(info['success'])
 			if self.cfg.save_video:
 				self.logger.video.save(self._step)
@@ -54,7 +55,7 @@ class OnlineTrainer(Trainer):
 		else:
 			obs = obs.unsqueeze(0).cpu()
 		if action is None:
-			action = torch.full_like(self.env.rand_act(), float('nan'))
+			action = torch.full_like(self.env.rand_act(), float('nan')).cpu()
 		if reward is None:
 			reward = torch.tensor(float('nan'))
 		td = TensorDict(
@@ -98,6 +99,10 @@ class OnlineTrainer(Trainer):
 			else:
 				action = self.env.rand_act()
 			obs, reward, done, info = self.env.step(action)
+			action = action.cpu()
+			reward = reward.cpu().squeeze()
+
+   
 			self._tds.append(self.to_td(obs, action, reward))
 
 			# Update agent
