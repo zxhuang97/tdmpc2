@@ -43,6 +43,7 @@ class OnlineTrainer(Trainer):
 			ep_successes.append(info['success'])
 			if self.cfg.save_video:
 				self.logger.video.save(self._step)
+		print(info["episode"])
 		return dict(
 			episode_reward=np.nanmean(ep_rewards),
 			episode_success=np.nanmean(ep_successes),
@@ -50,24 +51,27 @@ class OnlineTrainer(Trainer):
 
 	def to_td(self, obs, action=None, reward=None):
 		"""Creates a TensorDict for a new episode."""
+		num_envs = self.env.num_envs
 		if isinstance(obs, dict):
 			obs = TensorDict(obs, batch_size=(), device='cpu')
 		else:
-			obs = obs.unsqueeze(0).cpu()
+			obs = obs
 		if action is None:
-			action = torch.full_like(self.env.rand_act(), float('nan')).cpu()
+			action = torch.full_like(self.env.rand_act(), float('nan')).to(obs.device)
 		if reward is None:
-			reward = torch.tensor(float('nan'))
+			reward = torch.full((num_envs,), float('nan')).to(obs.device)
+			# reward = torch.tensor(float('nan')).to(obs.device)
 		td = TensorDict(
 			obs=obs,
-			action=action.unsqueeze(0),
-			reward=reward.unsqueeze(0),
-		batch_size=(1,))
+			action=action,
+			reward=reward,
+		batch_size=(num_envs,))  # (1, N) batchsize = (1,)
 		return td
 
 	def train(self):
 		"""Train a TD-MPC2 agent."""
 		train_metrics, done, eval_next = {}, True, False
+		obs = self.env.reset()
 		while self._step <= self.cfg.steps:
 			# Evaluate agent periodically
 			if self._step % self.cfg.eval_freq == 0:
@@ -90,17 +94,19 @@ class OnlineTrainer(Trainer):
 					self.logger.log(train_metrics, 'train')
 					self._ep_idx = self.buffer.add(torch.cat(self._tds))
 
-				obs = self.env.reset()
+				# obs = self.env.reset()
+				obs, extras = self.env.get_observations()
+	
 				self._tds = [self.to_td(obs)]
 
 			# Collect experience
 			if self._step > self.cfg.seed_steps:
 				action = self.agent.act(obs, t0=len(self._tds)==1)
 			else:
-				action = self.env.rand_act()
+				action = self.env.rand_act() # change shape
 			obs, reward, done, info = self.env.step(action)
-			action = action.cpu()
-			reward = reward.cpu().squeeze()
+			# action = action.cpu() # remove
+			# reward = reward.cpu().squeeze()
 
    
 			self._tds.append(self.to_td(obs, action, reward))
