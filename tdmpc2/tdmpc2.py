@@ -89,13 +89,13 @@ class TDMPC2(torch.nn.Module):
 		self.model.load_state_dict(state_dict["model"])
 
 	@torch.no_grad()
-	def act(self, obs, t0=False, eval_mode=False, task=None):
+	def act(self, obs, t0, eval_mode=False, task=None):
 		"""
 		Select an action by planning in the latent space of the world model.
 
 		Args:
 			obs (torch.Tensor): Observation from the environment.
-			t0 (bool): Whether this is the first observation in the episode.
+			t0 (torch.tensor): Whether this is the first observation in the episode.
 			eval_mode (bool): Whether to use the mean of the action distribution.
 			task (int): Task index (only used for multi-task experiments).
 
@@ -131,13 +131,13 @@ class TDMPC2(torch.nn.Module):
 		return value
 
 	@torch.no_grad()
-	def _plan(self, obs, t0=False, eval_mode=False, task=None):
+	def _plan(self, obs, t0, eval_mode=False, task=None):
 		"""
 		Plan a sequence of actions using the learned world model.
 
 		Args:
 			z (torch.Tensor): Latent state from which to plan.
-			t0 (bool): Whether this is the first observation in the episode.
+			t0 (torch.Tensor): Whether this is the first observation in the episode.
 			eval_mode (bool): Whether to use the mean of the action distribution.
 			task (Torch.Tensor): Task index (only used for multi-task experiments).
 
@@ -168,7 +168,8 @@ class TDMPC2(torch.nn.Module):
 		z = z.unsqueeze(1).repeat(1, self.cfg.num_samples, 1)
 		mean = torch.zeros(BS, self.cfg.horizon, self.cfg.action_dim, device=self.device)
 		std = torch.full((BS, self.cfg.horizon, self.cfg.action_dim), self.cfg.max_std, dtype=torch.float, device=self.device)
-		if not t0: # update this
+		# mean[~t0, :-1] = self._prev_mean[~t0, 1:].clone()
+		if not t0[0]: # update this
 			mean[:, :-1] = self._prev_mean[:, 1:]
 		actions = torch.empty(BS, self.cfg.horizon, self.cfg.num_samples, self.cfg.action_dim, device=self.device)
 		if self.cfg.num_pi_trajs > 0:
