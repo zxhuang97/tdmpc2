@@ -49,28 +49,6 @@ class OnlineTrainer(Trainer):
 			episode_reward=np.nanmean(to_numpy(ep_rewards)),
 			episode_success=np.nanmean(to_numpy(ep_successes)),
 		)
-		# ep_rewards, ep_successes = [], []
-		# for i in range(self.cfg.eval_episodes):
-		# 	obs, done, ep_reward, t = self.env.reset(), False, 0, 0
-		# 	if self.cfg.save_video:
-		# 		self.logger.video.init(self.env, enabled=(i==0))
-		# 	while not done:
-		# 		torch.compiler.cudagraph_mark_step_begin()
-		# 		action = self.agent.act(obs, t0=t==0, eval_mode=True)
-		# 		obs, reward, done, info = self.env.step(action)
-		# 		ep_reward += reward
-		# 		t += 1
-		# 		if self.cfg.save_video:
-		# 			self.logger.video.record(self.env)
-		# 	ep_rewards.append(ep_reward.detach().cpu())
-		# 	ep_successes.append(info['success'])
-		# 	if self.cfg.save_video:
-		# 		self.logger.video.save(self._step)
-		# print(info["episode"])
-		# return dict(
-		# 	episode_reward=np.nanmean(ep_rewards),
-		# 	episode_success=np.nanmean(ep_successes),
-		# )
 
 	def to_td(self, obs, action=None, reward=None):
 		"""Creates a TensorDict for a new episode."""
@@ -101,7 +79,6 @@ class OnlineTrainer(Trainer):
 			if self._step % self.cfg.eval_freq == 0:
 				eval_next = True
 	
-    
 			if done.any():
 				if eval_next:
 					eval_metrics = self.eval()
@@ -119,19 +96,17 @@ class OnlineTrainer(Trainer):
 					for tds in batch_tds:
 						self._ep_idx = self.buffer.add(tds)
 
-				obs = self.env.reset()
+				# obs = self.env.reset()
 				self._tds = [self.to_td(obs)]
 
 			# Collect experience
-			episode_step = self.env.unwrapped.episode_length_buf
-			if self._step > self.cfg.seed_steps:
-				action = self.agent.act(obs, t0=episode_step==0)
-			else:
-				action = self.env.rand_act() # change shape
-			obs, reward, done, info = self.env.step(action)
-			# action = action.cpu() # remove
-			# reward = reward.cpu().squeeze()
-
+			with torch.inference_mode():
+				episode_step = self.env.unwrapped.episode_length_buf
+				if self._step > self.cfg.seed_steps:
+					action = self.agent.act(obs, t0=episode_step==0)
+				else:
+					action = self.env.rand_act() # change shape
+				obs, reward, done, info = self.env.step(action)
    
 			self._tds.append(self.to_td(obs, action, reward))
 
